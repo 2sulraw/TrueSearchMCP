@@ -1,0 +1,48 @@
+{
+  "name": "truesearch-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Google & YouTube search using real browser cookies — no API keys",
+  "type": "module",
+  "main": "./build/index.js",
+  "files": [
+    "build",
+    "install.bat",
+    "tsmcp.bat",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "truesearch": "./build/menu.js",
+    "truesearch-mcp": "./build/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc || exit 0",
+    "start": "node build/menu.js",
+    "menu": "node build/menu.js",
+    "repl": "node build/repl.js",
+    "search": "node build/cli.js search",
+    "cookies": "node build/cli.js cookies",
+    "config": "node build/cli.js config",
+    "mcp": "node build/index.js",
+    "release": "tsc && npm pack"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.9.1",
+    "cheerio": "^1.0.0",
+    "koffi": "^2.9.0",
+    "node-fetch": "^3.3.2",
+    "undici": "^8.11.0",
+    "zod": "^3.25.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.3",
+    "@types/node-fetch": "^2.6.12",
+    "typescript": "^5.8.3"
+  }
+}
