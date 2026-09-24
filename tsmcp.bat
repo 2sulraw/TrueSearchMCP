@@ -4,3 +4,9 @@ if "%~1"=="" (
 ) else (
   node "%LOCALAPPDATA%\TrueSearchMCP\build\cli.js" %*
 )
+if errorlevel 1 (
+  echo.
+  echo tsmcp exited with an error. If this persists, re-run install.bat
+  pause
+)
+exit /b %errorlevel%

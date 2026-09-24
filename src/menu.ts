@@ -12,6 +12,7 @@ import { searchGoogle } from "./search.js";
 import { searchYouTube, scrapeYouTubeVideo, getYouTubeComments } from "./youtube.js";
 import { showConfig, setProxy, healthCheck, MCP_PATH, HEALTH_PORT, isMcpRunning, claudeInstallStatus } from "./cfg.js";
 import { detectHarnesses, installHarness, uninstallHarness, detectedSummary } from "./harness.js";
+import { maybeStartCheck, getUpdateBadge } from "./updatecheck.js";
 import { activeProxyUrl } from "./proxy.js";
 import type { Cookie } from "./types.js";
 
@@ -45,16 +46,12 @@ function ask(q: string): Promise<string> {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question(q, (ans) => {
       rl.close();
+      // readline.close() pauses stdin — without resume, keypress (menu input) dies
+      process.stdin.resume();
       if (process.stdin.isTTY) process.stdin.setRawMode(true);
       res(ans);
     });
   });
-}
-
-function pad(s: string, len: number): string {
-  // pad accounting only for visible chars (strip ANSI for length calc)
-  const visible = s.replace(/\x1b\[[0-9;]*m/g, "");
-  return s + " ".repeat(Math.max(0, len - visible.length));
 }
 
 interface MenuItem {
@@ -94,10 +91,16 @@ function buildStatusLine(): string {
 async function selectMenu(title: string, subtitle: string | null, items: MenuItem[]): Promise<MenuResult> {
   let sel = 0;
   const hint = `${c.dim}↑↓/j/k move  •  enter select  •  1-9,0 hotkey  •  esc back${c.reset}`;
-  const statusLine = buildStatusLine(); // once per menu open
+  const statusLine = buildStatusLine(); // once per menu open (cached)
+  // Fresh harness detection every time a menu screen opens (fs-only, cheap)
+  const hs = detectHarnesses();
+  const harnessPart = `   ${c.dim}· harnesses ${hs.filter((h) => h.detected).length}/${hs.length}${c.reset}`;
 
   return new Promise((resolve) => {
+    let menuAlive = true;
+
     const render = () => {
+      if (!menuAlive) return;
       const lines: string[] = [];
       lines.push("");
       lines.push(`  ${c.cyan}${c.bold}┌──────────────────────────────────────────────┐${c.reset}`);
@@ -108,25 +111,30 @@ async function selectMenu(title: string, subtitle: string | null, items: MenuIte
       items.forEach((it, i) => {
         const num = i + 1;
         const marker = it.danger ? c.red : c.green;
-        const active = i === sel;
-        const prefix = active
+        const isActive = i === sel;
+        const prefix = isActive
           ? `  ${marker}❯ ${c.reset}`
           : `    ${c.dim} ${c.reset}`;
-        const numStr = active
+        const numStr = isActive
           ? `${c.bold}${marker}${num}${c.reset}`
           : `${c.dim}${num}${c.reset}`;
-        const label = active
+        const label = isActive
           ? `${c.bold}${c.white}${it.label}${c.reset}`
           : `${c.reset}${it.label}`;
         lines.push(`${prefix}${numStr}. ${label}`);
       });
       lines.push("");
-      lines.push(statusLine);
+      lines.push(statusLine + harnessPart);
+      const badge = getUpdateBadge();
+      if (badge) lines.push(`  ${badge}`);
       lines.push(`  ${hint}`);
       process.stdout.write("\x1b[2J\x1b[H" + lines.join("\n") + "\n");
     };
 
-    const cleanup = () => process.stdin.off("keypress", onKey);
+    const cleanup = () => {
+      menuAlive = false;
+      process.stdin.off("keypress", onKey);
+    };
 
     const choose = (index: number) => {
       cleanup();
@@ -158,7 +166,12 @@ async function selectMenu(title: string, subtitle: string | null, items: MenuIte
       }
     };
 
+    process.stdin.resume(); // ensure flowing after any prior ask() closed a readline
     process.stdin.on("keypress", onKey);
+    // Live update check: fires in background on menu open; re-renders badge when done
+    maybeStartCheck(() => {
+      if (menuAlive) render();
+    });
     render();
   });
 }

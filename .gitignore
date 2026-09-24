@@ -14,6 +14,7 @@ mcp.log
 
 # Release artifacts
 *.tgz
+*.zip
 
 # Editor / tooling
 .claude/

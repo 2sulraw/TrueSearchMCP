@@ -7,6 +7,7 @@
   "files": [
     "build",
     "install.bat",
+    "uninstall.bat",
     "tsmcp.bat",
     "README.md",
     "LICENSE"
@@ -23,7 +24,6 @@
     "prepare": "tsc || exit 0",
     "start": "node build/menu.js",
     "menu": "node build/menu.js",
-    "repl": "node build/repl.js",
     "search": "node build/cli.js search",
     "cookies": "node build/cli.js cookies",
     "config": "node build/cli.js config",
@@ -35,14 +35,12 @@
     "better-sqlite3": "^11.9.1",
     "cheerio": "^1.0.0",
     "koffi": "^2.9.0",
-    "node-fetch": "^3.3.2",
     "undici": "^8.11.0",
     "zod": "^3.25.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
-    "@types/node-fetch": "^2.6.12",
     "typescript": "^5.8.3"
   }
 }

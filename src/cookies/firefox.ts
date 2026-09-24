@@ -112,6 +112,12 @@ export function getFirefoxCookies(domain: string, profile?: string): Cookie[] {
       db.close();
     }
   } finally {
-    try { fs.unlinkSync(tmpDb); fs.rmdirSync(tmpDir); } catch { /* best effort */ }
+    // SQLite also creates -wal/-shm sidecars; delete all three or rmdir fails and leaks cookie data
+    try {
+      for (const f of [tmpDb, `${tmpDb}-wal`, `${tmpDb}-shm`]) {
+        if (fs.existsSync(f)) fs.unlinkSync(f);
+      }
+      fs.rmdirSync(tmpDir);
+    } catch { /* best effort */ }
   }
 }

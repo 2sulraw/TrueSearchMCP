@@ -46,15 +46,27 @@ Largest deps: `better-sqlite3` 68 MB, `koffi` 28 MB (native), rest is small.
 
 ```bash
 npm install         # prepare hook compiles TypeScript automatically
-npm run release     # tsc + npm pack → truesearch-mcp-1.0.0.tgz
+npm run build       # tsc → build/
 ```
 
-The tarball (`truesearch-mcp-1.0.0.tgz`) contains `build/`, `install.bat`, `tsmcp.bat`, `README.md`, `LICENSE`, and `package.json` — no cookies, no config, no logs.
+**Release package (ZIP):**
+
+```powershell
+# from the project root, after npm run build:
+npm run build
+# stage + zip (PowerShell):
+powershell -NoProfile -Command ^
+  "$s='%TEMP%\tsmcp-release'; Remove-Item $s -Recurse -Force -EA 0; New-Item -ItemType Directory -Path \"$s\TrueSearchMCP\" | Out-Null;" ^
+  "Copy-Item build,package.json,package-lock.json,README.md,LICENSE,install.bat,uninstall.bat,tsmcp.bat -Destination \"$s\TrueSearchMCP\" -Recurse;" ^
+  "Compress-Archive -Path \"$s\TrueSearchMCP\" -DestinationPath 'TrueSearchMCP-1.0.0.zip' -Force"
+```
+
+The ZIP contains `build/` (runtime JS), `install.bat`, `uninstall.bat`, `tsmcp.bat`, `package.json`, `package-lock.json`, `README.md`, `LICENSE` — no cookies, no config, no logs, no source.
 
 **Windows installer (recommended):**
 
 ```powershell
-# extract the tarball, then from the extracted folder:
+# extract the ZIP, then from the extracted TrueSearchMCP folder:
 .\install.bat
 ```
 
@@ -71,19 +83,16 @@ tsmcp search "query"  # CLI passthrough (any cli.js command)
 tsmcp harness list
 ```
 
-Uninstall: delete `%LOCALAPPDATA%\TrueSearchMCP` and `%APPDATA%\npm\tsmcp.bat`.
+Uninstall: run `.\uninstall.bat` from the release folder (removes the install dir + `tsmcp` command; harness config entries are left for you to remove manually).
 
 **npm pack install (alternative):**
 
 ```bash
+npm run release     # tsc + npm pack → truesearch-mcp-1.0.0.tgz
 npm install -g ./truesearch-mcp-1.0.0.tgz
-truesearch          # interactive menu
-truesearch-mcp      # MCP server on stdio
 ```
 
 ### Releasing to GitHub (not yet done)
-
-Repo is initialized locally and files are staged. When you're ready:
 
 ```bash
 git commit -m "Release v1.0.0"
@@ -92,9 +101,9 @@ git remote add origin <your-github-repo-url>
 git push -u origin main --tags
 ```
 
-Then attach `truesearch-mcp-1.0.0.tgz` to the GitHub Release for `v1.0.0`.
+Then attach `TrueSearchMCP-1.0.0.zip` to the GitHub Release for `v1.0.0`.
 
-> `.cookies.json`, `.config.json`, `mcp.log`, `build/`, and `node_modules/` are gitignored — cookies never enter the repo.
+> `.cookies.json`, `.config.json`, `mcp.log`, `build/`, `node_modules/`, `*.zip` are gitignored — cookies never enter the repo.
 
 ## Installation
 
@@ -124,12 +133,11 @@ npm run config -- install both
 | 2 | **Claude Code** | `~/.claude.json` (user) / `.mcp.json` (project) | `claude mcp add truesearch -- node D:\TrueSearchMCP\build\index.js --scope user` |
 | 3 | **Hermes** (Nous Research) | `~/.hermes/config.yaml` or `%AppData%\hermes\config.yaml` | YAML below (`mcp_servers:` key) |
 | 4 | **OpenCode** | `~/.config/opencode/opencode.json` | JSON below (`mcp` key, `type: "local"`) |
-| 5 | **Cline / Roo Code** (VS Code) | `cline_mcp_settings.json` (extension UI → MCP Servers) | JSON below via extension settings |
+| 5 | **Cline / Roo Code** (CLI + VS Code) | `~/.cline/data/settings/cline_mcp_settings.json` or VS Code globalStorage | JSON below |
 | 6 | **Cursor** | `~/.cursor/mcp.json` or Settings → MCP | JSON below (`mcpServers` key) |
 | 7 | **Goose** (Block) | `~/.config/goose/config.yaml` | YAML below (`mcp_servers:` key) |
 | 8 | **Zed** | `~/.config/zed/settings.json` | JSON below (`context_servers` key) |
 | 9 | **Windsurf** | `~/.codeium/windsurf/mcp_config.json` | JSON below (`mcpServers` key) |
-| 10 | **Continue** (VS Code) | `~/.continue/config.yaml` | YAML below (`mcp_servers:` key) |
 
 #### Claude Desktop
 
@@ -208,7 +216,25 @@ Tools appear as `mcp__truesearch__search_google`, etc.
 
 #### Cline / Roo Code
 
-VS Code → Cline extension → MCP Servers → Add New MCP Server, paste:
+**Cline CLI** (npm) — or use `harness install cline`, writes to `~/.cline/data/settings/cline_mcp_settings.json`:
+
+```bash
+cline mcp install truesearch --yes -- node D:\TrueSearchMCP\build\index.js
+```
+
+Or paste into `~/.cline/data/settings/cline_mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "truesearch": {
+      "transport": { "type": "stdio", "command": "node", "args": ["D:\\TrueSearchMCP\\build\\index.js"] }
+    }
+  }
+}
+```
+
+**VS Code extension:** Cline extension → MCP Servers → Add New MCP Server:
 
 ```json
 {
@@ -278,20 +304,14 @@ mcp_servers:
 }
 ```
 
-#### Continue
+### Global install (experimental)
 
-`~/.continue/config.yaml`:
+Recommended: extract `TrueSearchMCP-1.0.0.zip` and run `.\install.bat` (see Release build above).
 
-```yaml
-mcp_servers:
-  truesearch:
-    command: node
-    args: ["D:/TrueSearchMCP/build/index.js"]
-```
-
-### Global install from release tarball (experimental)
+Alternative via npm tarball:
 
 ```bash
+npm run release     # produces truesearch-mcp-1.0.0.tgz
 npm install -g ./truesearch-mcp-1.0.0.tgz
 truesearch                      # interactive menu
 truesearch-mcp                  # MCP server on stdio
@@ -322,12 +342,7 @@ node build/cli.js config health
 node build/cli.js harness list              # auto-detect installed harnesses
 node build/cli.js harness install <id>      # install MCP into a harness
 node build/cli.js harness uninstall <id>    # remove MCP from a harness
-```
-
-### REPL
-
-```bash
-npm run repl
+node build/cli.js update                    # check for updates (GitHub / npm)
 ```
 
 ## Browser notes

@@ -13,7 +13,15 @@ export interface Harness {
 
 const home = os.homedir();
 const appData = process.env.APPDATA || "";
-const localAppData = process.env.LOCALAPPDATA || "";
+
+// Cline: CLI stores config under ~/.cline, VS Code extension under globalStorage
+const CLINE_CLI_SETTINGS = path.join(home, ".cline", "data", "settings", "cline_mcp_settings.json");
+const CLINE_VSCODE_SETTINGS = path.join(
+  appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"
+);
+function clineSettingsPath(): string {
+  return firstExisting(CLINE_CLI_SETTINGS, CLINE_VSCODE_SETTINGS) || CLINE_CLI_SETTINGS;
+}
 
 function exists(p: string): boolean {
   try { return fs.existsSync(p); } catch { return false; }
@@ -92,25 +100,25 @@ export function detectHarnesses(): Harness[] {
     });
   }
 
-  // 5. Cline / Roo Code
+  // 5. Cline (npm CLI) / Roo / VS Code extension
   {
-    const storage = path.join(appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev");
-    const extDirs = path.join(home, ".vscode", "extensions");
-    const ext = exists(extDirs) && fs.readdirSync(extDirs).some((d) => d.startsWith("saoudrizwan.claude-dev"));
-    const settingsPath = path.join(storage, "settings", "cline_mcp_settings.json");
-    const detected = exists(storage) || ext;
-    const cfg = readJson(settingsPath);
+    const cliHome = exists(path.join(home, ".cline"));
+    const npmCline = exists(path.join(appData, "npm", "cline.cmd")) || exists(path.join(appData, "npm", "cline"));
+    const extDirs = [path.join(home, ".vscode", "extensions"), path.join(home, ".cursor", "extensions")];
+    const ext = extDirs.some((d) => exists(d) && fs.readdirSync(d).some((x) => x.startsWith("saoudrizwan.claude-dev") || x.startsWith("rooveterinaryinc.roo-cline")));
+    const settingsPath = firstExisting(CLINE_CLI_SETTINGS, CLINE_VSCODE_SETTINGS);
+    const detected = !!settingsPath || cliHome || npmCline || ext;
+    const cfg = settingsPath ? readJson(settingsPath) : null;
     list.push({
       id: "cline", name: "Cline / Roo Code",
       detected, installed: !!cfg?.mcpServers?.truesearch,
-      detail: detected ? settingsPath : "VS Code extension not found",
+      detail: settingsPath || (cliHome || npmCline ? "Cline CLI (npm) — settings will be created on install" : "Cline not found"),
     });
   }
 
   // 6. Cursor
   {
     const cfgPath = path.join(home, ".cursor", "mcp.json");
-    const detected = exists(cfgPath) || exists(path.join(appData, "Cursor")) || exists(path.join(localAppData, "Programs"));
     const cursorApp = exists(path.join(appData, "Cursor"));
     const cfg = readJson(cfgPath);
     list.push({
@@ -119,7 +127,6 @@ export function detectHarnesses(): Harness[] {
       installed: !!cfg?.mcpServers?.truesearch,
       detail: exists(cfgPath) ? cfgPath : cursorApp ? path.join(appData, "Cursor") + " (mcp.json will be created)" : "Cursor not found",
     });
-    void detected;
   }
 
   // 7. Goose
@@ -162,20 +169,6 @@ export function detectHarnesses(): Harness[] {
     });
   }
 
-  // 10. Continue
-  {
-    const p = firstExisting(
-      path.join(home, ".continue", "config.yaml"),
-      path.join(appData, "Continue", "config.yaml")
-    );
-    const text = p ? readText(p) : "";
-    list.push({
-      id: "continue", name: "Continue",
-      detected: !!p, installed: /truesearch/.test(text),
-      detail: p || "config.yaml not found",
-    });
-  }
-
   return list;
 }
 
@@ -204,6 +197,17 @@ function yamlSnippet(): string {
 function zedSnippet(): string {
   return JSON.stringify(
     { context_servers: { truesearch: { command: "node", args: [MCP_PATH] } } },
+    null, 2
+  );
+}
+
+function clineSnippet(): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        truesearch: { transport: { type: "stdio", command: "node", args: [MCP_PATH] } },
+      },
+    },
     null, 2
   );
 }
@@ -297,19 +301,24 @@ export function installHarness(id: string): InstallResult {
         if (!appendYamlBlock(p)) return { ok: false, message: `${h.name}: config already has mcp_servers — merge manually:\n${yamlSnippet()}` };
         return { ok: true, message: `${h.name}: installed → ${p}\nRun \`/reload-mcp\` in Hermes.` };
       }
-      case "continue": {
-        const p = h.detail;
-        if (!appendYamlBlock(p)) return { ok: false, message: `${h.name}: config already has mcp_servers — merge manually:\n${yamlSnippet()}` };
-        return { ok: true, message: `${h.name}: installed → ${p}\nRestart Continue to load it.` };
-      }
       case "goose": {
         const p = h.detail;
         if (!appendYamlBlock(p)) return { ok: false, message: `${h.name}: config already has mcp_servers — merge manually:\n${yamlSnippet()}` };
         return { ok: true, message: `${h.name}: installed → ${p}` };
       }
       case "cline": {
-        mergeJsonMcpServers(h.detail);
-        return { ok: true, message: `${h.name}: installed → ${h.detail}\nReload the VS Code window.` };
+        // CLI settings use {transport:{type,command,args}}; VS Code ext uses classic {type,command,args}
+        const p = clineSettingsPath();
+        const cfg = readJson(p) || {};
+        cfg.mcpServers = cfg.mcpServers || {};
+        cfg.mcpServers.truesearch =
+          p === CLINE_CLI_SETTINGS
+            ? { transport: { type: "stdio", command: "node", args: [MCP_PATH] } }
+            : { type: "stdio", command: "node", args: [MCP_PATH] };
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+        const hint = p === CLINE_CLI_SETTINGS ? "New cline sessions pick it up automatically." : "Reload the VS Code window.";
+        return { ok: true, message: `${h.name}: installed → ${p}\n${hint}` };
       }
       case "cursor": {
         const p = path.join(home, ".cursor", "mcp.json");
@@ -365,7 +374,7 @@ export function uninstallHarness(id: string): InstallResult {
       case "cline":
       case "cursor":
       case "windsurf": {
-        const p = id === "cline" ? h.detail : id === "cursor"
+        const p = id === "cline" ? clineSettingsPath() : id === "cursor"
           ? path.join(home, ".cursor", "mcp.json")
           : path.join(home, ".codeium", "windsurf", "mcp_config.json");
         return removeJsonEntry(p, "mcpServers", "truesearch")
@@ -374,7 +383,6 @@ export function uninstallHarness(id: string): InstallResult {
       }
       case "hermes":
       case "goose":
-      case "continue":
         return removeYamlTruesearch(h.detail)
           ? { ok: true, message: `${h.name}: uninstalled → ${h.detail}` }
           : { ok: false, message: `${h.name}: could not remove automatically — delete the truesearch block under mcp_servers in ${h.detail}` };
@@ -390,8 +398,8 @@ function snippetFor(id: string): string {
   switch (id) {
     case "opencode": return openCodeSnippet();
     case "hermes":
-    case "goose":
-    case "continue": return yamlSnippet();
+    case "goose": return yamlSnippet();
+    case "cline": return clineSnippet();
     case "zed": return zedSnippet();
     default: return jsonSnippet();
   }

@@ -6,7 +6,20 @@ import { searchGoogle } from "./search.js";
 import { searchYouTube, scrapeYouTubeVideo, getYouTubeComments } from "./youtube.js";
 import { showConfig, setProxy, installToClaude, uninstallFromClaude, healthCheck } from "./cfg.js";
 import { detectHarnesses, installHarness, uninstallHarness, detectedSummary } from "./harness.js";
+import { getUpdateCheck } from "./updatecheck.js";
 import type { Cookie } from "./types.js";
+
+async function checkUpdate(): Promise<void> {
+  const r = await getUpdateCheck(true);
+  console.log(`Local:   ${r.local}`);
+  r.lines.forEach((l) => console.log(l));
+  if (r.available) {
+    console.log(`\n${r.hint}`);
+    process.exitCode = 2;
+  } else {
+    console.log("\nNo update found.");
+  }
+}
 
 async function getCookies(browser: string, profile?: string): Promise<Cookie[]> {
   if (browser === "stored") {
@@ -180,7 +193,7 @@ async function main() {
         });
         console.log("");
         console.log("Install:   harness install <id>   e.g. harness install opencode");
-        console.log("Uninstall: harness uninstall <id> e.g. harness uninstall continue");
+        console.log("Uninstall: harness uninstall <id> e.g. harness uninstall hermes");
         console.log("IDs: " + list.map((h) => h.id).join(", "));
       } else if (sub === "install") {
         const id = args[1];
@@ -197,6 +210,11 @@ async function main() {
       } else {
         throw new Error("Usage: harness <list|install <id>|uninstall <id>>");
       }
+      break;
+    }
+
+    case "update": {
+      await checkUpdate();
       break;
     }
 
@@ -219,7 +237,8 @@ Usage:
   config health               Run health check
   harness list                Auto-detect harnesses on this machine
   harness install <id>        Install MCP into a detected harness
-  harness uninstall <id>      Remove MCP from a harness`);
+  harness uninstall <id>      Remove MCP from a harness
+  update                      Check for updates (GitHub / npm / repo source)`);
   }
 }
 
