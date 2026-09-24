@@ -107,21 +107,17 @@ Then attach `TrueSearchMCP-1.0.0.zip` to the GitHub Release for `v1.0.0`.
 
 ## Installation
 
-### 1. Build from source (once, required for every harness)
+### 1. From source (GitHub code download)
 
 ```bash
 git clone <repo-url>
 cd TrueSearchMCP
-npm install          # runs `prepare` → builds automatically
+.\install.bat       # auto-builds if build/ is missing (needs Node.js 18+), then installs
 ```
 
-The MCP entry point is `<repo>/build/index.js` (e.g. `D:\TrueSearchMCP\build\index.js`).
+`install.bat` works on both the release ZIP (pre-built `build/`) and a raw source checkout — it detects `src/` and runs `npm install` (which triggers `tsc`) automatically. You can also build manually with `npm install` and wire up Claude only via `npm run config -- install both`.
 
-One-command installer for Claude Desktop + Claude Code:
-
-```bash
-npm run config -- install both
-```
+The MCP entry point after build is `<repo>/build/index.js`.
 
 ### 2. Add to a harness
 
